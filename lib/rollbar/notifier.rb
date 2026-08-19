@@ -508,6 +508,21 @@ module Rollbar
 
       return 'ignored' if item.ignored?
 
+      # COOLHAND FORK: hand the built payload to the app-side harness so a production
+      # error can open a GitHub issue. Placed here deliberately -- exception_level_filters
+      # are applied upstream in #log, and ignored_person_ids just above, so anything the
+      # host app already suppresses never reaches this line.
+      #
+      # Guarded by defined? so the gem still runs standalone, and rescued so a broken
+      # hook can never stop the error from reaching Rollbar itself.
+      if defined?(Rollbar::CoolhandHook)
+        begin
+          Rollbar::CoolhandHook.call(item.payload, level)
+        rescue StandardError => e
+          log_error("[Rollbar] CoolhandHook failed: #{e.class}: #{e.message}")
+        end
+      end
+
       schedule_item(item) if configuration.transmit
 
       log_and_return_item_data(item)
